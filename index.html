@@ -1,0 +1,365 @@
+<!DOCTYPE html>
+<html lang="en">
+	<head>
+		<meta http-equiv="Content-Type" content="text/html; charset=UTF-8" />
+		<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+		<title>语音转文字</title>
+		<style>
+			#transcript {
+				width: 100%;
+				height: 200px;
+				background-color: beige;
+				margin-top: 100px;
+				text-align: center;
+				display: flex;
+				/* 或者 inline-block */
+				justify-content: center;
+				/* 水平居中 */
+				align-items: center;
+				/* 垂直居中 */
+			}
+		</style>
+		<script src="./zh-to-number.js"></script>
+	</head>
+	<body class="container pt-5 bg-dark">
+		<h2 class="mt-4 text-light">识别结果</h2>
+		<div class="p-3" style="border: 1px solid gray; height: 300px; border-radius: 8px;">
+			<span id="status" class="lead mt-3 text-light" style="display: none;">识别中 ...</span>
+			<span id="final" class="text-light"></span>
+			<span id="interim" class="text-secondary"></span>
+		</div>
+		<div class="mt-4" style="float:right;">
+			<button class="btn btn-success" id="start">开始</button>
+			<button class="btn btn-danger" id="stop">停止</button>
+		</div>
+
+		<div>关键词：颜色|宽度|高度|圆角|边框圆角|字体|字体大小|重置|打开百度|关闭百度|蹦迪模式</div>
+		<div id="transcript">
+			控制模块
+		</div>
+		<script>
+			const transcript = document.getElementById('transcript');
+			if ("webkitSpeechRecognition" in window) {
+				let speechRecognition = new webkitSpeechRecognition();
+				let final_transcript = "";
+				let interim_transcript = '';
+				speechRecognition.continuous = true; //设置是持续听
+				speechRecognition.interimResults = true; //设置是否允许临时结果
+				speechRecognition.lang = 'zh-CN'
+				speechRecognition.onstart = () => {
+					document.querySelector("#status").style.display = "block";
+				};
+				speechRecognition.onerror = (e) => {
+					document.querySelector("#status").style.display = "none";
+				};
+				speechRecognition.onend = () => {
+					document.querySelector("#status").style.display = "none";
+				};
+
+				let isSwitchExecuted = false; // 定义一个标志变量，是否正在执行
+				let isBaiduOpened = false; // 定义一个标志变量，是否已经打开新窗口
+				let baiduWindow = null; // 定义一个标志变量，接收百度页面
+				speechRecognition.onresult = (event) => {
+					let interim_transcript = "";
+					for (let i = event.resultIndex; i < event.results.length; ++i) {
+						if (event.results[i].isFinal) {
+							final_transcript += event.results[i][0].transcript;
+						} else {
+							interim_transcript += event.results[i][0].transcript;
+						}
+					}
+					document.querySelector("#final").innerHTML = final_transcript;
+					document.querySelector("#interim").innerHTML = interim_transcript;
+
+					// 使用正则表达式匹配关键词
+					const keywordRegex = /(颜色|停止|宽度|高度|清空|圆角|边框圆角|字体|字体大小|重置|打开百度|关闭百度|蹦迪)/;
+
+					let value = event.results[event.resultIndex][0].transcript;
+					const result = replaceChineseNumWithArabicNum(value);
+					// 将文本按照两个字一组切分成数组,反转数组，最新的文字最新匹配
+					const words = (splitByX(result) || []).reverse();
+					let match = null;
+					for (let i = 0; i < words.length; i++) {
+						// 从末尾开始匹配关键词
+						match = words[i].match(keywordRegex);
+						if (match) {
+							break;
+						}
+					}
+					if (match && !isSwitchExecuted) { // 判断标志变量
+						isSwitchExecuted = true; // 设置标志变量为 true
+						const keyword = match[0];
+						switch (keyword) {
+							case '颜色':
+								const colorValue = getColorByName(result);
+								if (colorValue) {
+									transcript.style.backgroundColor = colorValue;
+								} else {}
+								break;
+							case '停止':
+								speechRecognition.stop();
+								break;
+							case '宽度':
+								let width = getAnumber(result);
+								if (width) {
+									transcript.style.width = width;
+								}
+								break;
+							case '高度':
+								let height = getAnumber(result);
+								if (height) {
+									transcript.style.height = height;
+								}
+								break;
+							case '圆角':
+								let radius = getAnumber(result);
+								if (radius) {
+									transcript.style.borderRadius = radius; // 将圆角大小设置为x像素
+								}
+								break;
+							case '边框圆角':
+								let radius1 = getAnumber(result);
+								if (radius1) {
+									transcript.style.borderRadius = radius1; // 将圆角大小设置为x像素
+								}
+								break;
+							case '字体':
+								let fontSize = getAnumber(result);
+								if (fontSize) {
+									transcript.style.fontSize = fontSize; // 将圆角大小设置为x像素
+								}
+								break;
+							case '字体大小':
+								let fontSize1 = getAnumber(result);
+								if (fontSize1) {
+									transcript.style.fontSize = fontSize1; // 将圆角大小设置为x像素
+								}
+								break;
+							case '清空':
+								final_transcript = "";
+								interim_transcript = '';
+								document.querySelector("#interim").innerHTML = '';
+								break;
+							case '重置':
+								final_transcript = "";
+								interim_transcript = '';
+								document.querySelector("#interim").innerHTML = '';
+								transcript.style.width = '100%';
+								transcript.style.height = '200px';
+								transcript.style.backgroundColor = 'beige';
+								transcript.style.borderRadius = '0';
+								transcript.style.fontSize = '12px';
+								break;
+							case '打开百度':
+								if (!isBaiduOpened) { // 判断标志变量
+									isBaiduOpened = true; // 设置标志变量为 true
+									baiduWindow = window.open("https://www.baidu.com");
+								}
+								break;
+							case '关闭百度':
+								// 在适当的时候调用以下语句关闭窗口
+								if (baiduWindow) {
+									baiduWindow.close();
+									baiduWindow = null;
+									isBaiduOpened = false; // 设置标志变量为 true
+								}
+								break;
+							case '蹦迪':
+								danceMode(transcript); // 启动蹦迪模式
+								break;
+								
+							default:
+								// console.log('没有匹配的关键词');
+						}
+						isSwitchExecuted = false; // 执行完毕后将标志变量设置回 false
+					} else {
+						// console.log('没有找到关键词');
+					}
+
+
+				};
+				speechRecognition.start();
+
+				document.querySelector("#start").onclick = () => {
+					speechRecognition.start();
+				};
+				document.querySelector("#stop").onclick = () => {
+					speechRecognition.stop();
+				};
+			} else {
+				console.log("Speech Recognition Not Available");
+				alert('当前浏览器不支持语音转文字，请使用Microsoft Edge 浏览器打开')
+			}
+
+			function replaceChineseNumWithArabicNum(str) {
+				if (str.indexOf("百度") !== -1) {
+					return str
+				} else {
+					return str.replace(/[零一二三四五六七八九十百千万亿]+/g, match => {
+						return __ZH_TO_NUMBER__.zhToNumber(match)
+					});
+				}
+
+			}
+
+
+			function getAnumber(str) {
+				// 使用正则表达式匹配最后一个数字
+				const regex = /\d+/g;
+				let match;
+				let lastNumber;
+				let unit = 'px'
+				while ((match = regex.exec(str)) !== null) {
+					lastNumber = match[0];
+					if (str.includes('%')) {
+						unit = '%'
+					}
+				}
+
+
+				if (lastNumber) {
+					return lastNumber + unit
+				} else {
+					return false
+				}
+			}
+
+			function splitByX(str) {
+				const result = [];
+				for (let i = 0; i < str.length; i++) {
+					for (let j = 1; j <= str.length; j++) {
+						if (i + j <= str.length) {
+							result.push(str.slice(i, i + j));
+						}
+					}
+				}
+				return result;
+			}
+
+
+
+
+
+
+			function getColorByName(str) {
+				const colorMap = {
+					"红色": "#FF0000",
+					"绿色": "#00FF00",
+					"蓝色": "#0000FF",
+					"黄色": "#FFFF00",
+					"黑色": "#000000",
+					"白色": "#FFFFFF",
+					"橙色": "#FFA500",
+					"紫色": "#800080",
+					"粉色": "#FFC0CB",
+					"棕色": "#A52A2A",
+					"灰色": "#808080",
+					"金色": "#FFD700",
+					"银色": "#C0C0C0",
+					"青色": "#00FFFF",
+					"深红色": "#8B0000",
+					"深绿色": "#006400",
+					"深蓝色": "#00008B",
+					"深黄色": "#9ACD32",
+					"深紫色": "#9400D3",
+					"深粉色": "#FF1493",
+					"深棕色": "#5F4B32",
+					"深灰色": "#A9A9A9",
+					"深金色": "#B8860B",
+					"深银色": "#696969",
+					"深青色": "#008B8B",
+					"浅红色": "#FFC0CB",
+					"浅绿色": "#90EE90",
+					"浅蓝色": "#ADD8E6",
+					"浅黄色": "#FFFFE0",
+					"浅紫色": "#E6E6FA",
+					"浅粉色": "#FFB6C1",
+					"浅棕色": "#CD853F",
+					"浅灰色": "#D3D3D3",
+					"浅金色": "#EEE8AA",
+					"浅银色": "#F0F8FF",
+					"浅青色": "#E0FFFF",
+					"玫瑰红色": "#FF007F",
+					"橄榄绿色": "#556B2F",
+					"藏蓝色": "#4A3B6A",
+					"鲜艳的黄色": "#FFD700",
+					"茶色": "#D2B48C",
+					"灰白色": "#F5F5F5",
+					"中红色": "#FF4040",
+					"中绿色": "#32CD32",
+					"中蓝色": "#4169E1",
+					"中黄色": "#FFD700",
+					"中紫色": "#9370DB",
+					"中棕色": "#A0522D",
+					"中灰色": "#778899",
+					"中金色": "#CD7F32",
+					"中银色": "#C0C0C0",
+					"中青色": "#00CED1",
+					"海军蓝色": "#000080",
+					"薰衣草紫色": "#E6E6FA",
+					"铁灰色": "#43464B",
+					"柠檬黄色": "#FFFACD",
+					"香蕉黄色": "#FFD700",
+					"卡其色": "#F0E68C",
+					"暗红色": "#8B0000",
+					"暗绿色": "#006400",
+					"暗蓝色": "#00008B",
+					"暗黄色": "#9ACD32",
+					"暗紫色": "#9400D3",
+					"暗粉色": "#FF1493",
+					"暗棕色": "#5F4B32",
+					"暗灰色": "#A9A9A9",
+					"暗金色": "#B8860B",
+					"暗银色": "#696969",
+					"暗青色": "#008B8B",
+					"亚麻色": "#FAF0E6",
+					"珊瑚红色": "#FF7F50",
+					"浅橙色": "#FFE4B5",
+					"深海蓝色": "#191970",
+					"暗褐色": "#5C4033",
+					"草绿色": "#7CFC00",
+					"孔雀蓝色": "#33A1C9",
+					"靛蓝色": "#4B0082",
+					"米白色": "#F5DEB3",
+					"桃红色": "#FFE5B4",
+					"橙黄色": "#FFA500",
+					"天蓝色": "#87CEEB",
+					"海绿色": "#2E8B57",
+				};
+
+
+				let lastColorCode = null;
+
+				for (const colorName in colorMap) {
+					if (str.includes(colorName)) {
+						lastColorCode = colorMap[colorName];
+					}
+				}
+
+				return lastColorCode;
+			}
+
+			function getRandomColor() {
+				let letters = '0123456789ABCDEF';
+				let color = '#';
+				for (let i = 0; i < 6; i++) {
+					color += letters[Math.floor(Math.random() * 16)];
+				}
+				return color;
+			}
+
+			function danceMode(transcript) {
+				let interval = setInterval(function() {
+					let color = getRandomColor();
+					transcript.style.backgroundColor = color;
+				}, 100); // 每隔1秒变换颜色
+
+				setTimeout(function() {
+					clearInterval(interval);
+					transcript.style.backgroundColor = "beige"; // 恢复原始背景颜色
+				}, 10000); // 持续10秒后停止蹦迪
+			}
+		</script>
+
+	</body>
+</html>
